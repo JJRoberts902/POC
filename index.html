@@ -2,86 +2,65 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>PS5 13.60</title>
+    <title>PS5 13.60 Debug</title>
     <style>
-        body {
-            background: #000;
-            color: #0f0;
-            font-family: monospace;
-            margin: 0;
-            padding: 20px;
-        }
-        #status {
-            font-size: 20px;
-            margin-bottom: 10px;
-            color: #0ff;
-        }
-        #log {
-            background: #111;
-            border: 1px solid #0f0;
-            padding: 10px;
-            height: 80vh;
-            overflow-y: auto;
-            font-size: 12px;
-            white-space: pre-wrap;
-        }
+        body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
         .error { color: #f00; }
-        .success { color: #0f0; }
-        .info { color: #ff0; }
+        .ok { color: #0f0; }
     </style>
 </head>
 <body>
-    <div id="status">Initializing...</div>
-    <div id="log"></div>
+    <h2>PS5 Browser Detection</h2>
+    <div id="out"></div>
     
     <script>
-        // Logging
-        const log = (msg, type) => {
-            const div = document.getElementById('log');
-            const time = new Date().toLocaleTimeString();
-            const span = document.createElement('div');
-            span.className = type || '';
-            span.textContent = `[${time}] ${msg}`;
-            div.appendChild(span);
-            div.scrollTop = div.scrollHeight;
+        const out = document.getElementById('out');
+        const log = (msg, cls) => {
+            out.innerHTML += `<div class="${cls}">${msg}</div>`;
         };
         
-        const setStatus = (msg) => {
-            document.getElementById('status').textContent = msg;
-        };
+        // User Agent
+        log('User Agent: ' + navigator.userAgent, 'ok');
         
         // Check features
-        const check = () => {
-            const features = {
-                BigInt: typeof BigInt,
-                WebAssembly: typeof WebAssembly,
-                SharedArrayBuffer: typeof SharedArrayBuffer
-            };
-            
-            log('Checking environment...', 'info');
-            for (const [name, type] of Object.entries(features)) {
-                const ok = type !== 'undefined';
-                log(`  ${name}: ${ok ? 'OK' : 'MISSING'}`, ok ? 'success' : 'error');
-            }
-            
-            if (features.SharedArrayBuffer === 'undefined') {
-                log('', 'info');
-                log('WARNING: SharedArrayBuffer not available', 'error');
-                log('This is normal in desktop browsers', 'info');
-                log('Exploit requires PS5 browser environment', 'info');
-            }
-            
-            return features;
-        };
+        const checks = [
+            ['BigInt', typeof BigInt],
+            ['WebAssembly', typeof WebAssembly],
+            ['WebAssembly.Memory', typeof WebAssembly?.Memory],
+            ['SharedArrayBuffer', typeof SharedArrayBuffer],
+            ['Atomics', typeof Atomics],
+            ['Worker', typeof Worker],
+            ['MessageChannel', typeof MessageChannel]
+        ];
         
-        // Run
-        setTimeout(() => {
-            check();
-            log('', 'info');
-            log('PS5 13.60 Exploit Framework', 'success');
-            log('Ready for kernel integration', 'info');
-            setStatus('Ready');
-        }, 100);
+        log('<br>Feature Check:', 'ok');
+        for (const [name, type] of checks) {
+            const ok = type !== 'undefined';
+            log(`  ${name}: ${ok ? 'OK' : 'MISSING'}`, ok ? 'ok' : 'error');
+        }
+        
+        // Check window properties
+        log('<br>Window Check:', 'ok');
+        log(`  window.location: ${window.location}`, 'ok');
+        log(`  document.domain: ${document.domain}`, 'ok');
+        
+        // Try to create SharedArrayBuffer
+        log('<br>SAB Test:', 'ok');
+        try {
+            const sab = new SharedArrayBuffer(1024);
+            log('  Created SAB: OK', 'ok');
+        } catch(e) {
+            log('  SAB Error: ' + e.message, 'error');
+        }
+        
+        // Try WebAssembly
+        log('<br>WASM Test:', 'ok');
+        try {
+            const mem = new WebAssembly.Memory({ initial: 1 });
+            log('  Created WASM Memory: OK', 'ok');
+        } catch(e) {
+            log('  WASM Error: ' + e.message, 'error');
+        }
     </script>
 </body>
 </html>
