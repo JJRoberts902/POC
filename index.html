@@ -4,11 +4,33 @@
     <meta charset="UTF-8">
     <title>PS5 Research Framework (Firmware 13.60)</title>
     <style>
-        body { background-color: #121212; color: #00ff00; font-family: monospace; padding: 20px; }
-        #terminal { background-color: #000; border: 1px solid #00ff00; padding: 15px; height: 400px; overflow-y: scroll; margin-bottom: 20px; }
+        body { 
+            background-color: #121212; 
+            color: #00ff00; 
+            font-family: monospace; 
+            padding: 20px; 
+            margin: 0; 
+        }
+        #terminal { 
+            background-color: #000; 
+            border: 1px solid #00ff00; 
+            padding: 15px; 
+            height: 400px; 
+            overflow-y: scroll; 
+            margin-bottom: 20px; 
+        }
         .error { color: #ff3333; }
         .success { color: #33ff33; }
-        button { background-color: #00ff00; color: #000; border: none; padding: 10px 20px; font-family: monospace; font-weight: bold; cursor: pointer; }
+        button { 
+            background-color: #00ff00; 
+            color: #000; 
+            border: none; 
+            padding: 10px 20px; 
+            font-family: monospace; 
+            font-weight: bold; 
+            cursor: pointer; 
+            font-size: 16px;
+        }
         button:hover { background-color: #00cc00; }
     </style>
 </head>
@@ -25,7 +47,7 @@
     <script>
         const logTerminal = document.getElementById('terminal');
         
-        // Global logging utility accessible by all imported modules
+        // Global logging utility
         window.logger = {
             log: function(msg) {
                 let div = document.createElement('div');
@@ -49,9 +71,25 @@
             }
         };
 
+        // ==================== DISABLE AUTO-RETRY (this fixes the constant refresh) ====================
+        const disableAutoRetry = () => {
+            try {
+                if (typeof window !== 'undefined' && window.exploitPrimitives && window.exploitPrimitives.syscall) {
+                    const originalSyscall = window.exploitPrimitives.syscall;
+                    window.exploitPrimitives.syscall = async function(sys_num, arg1, arg2, arg3) {
+                        window.logger.log(`[Native Syscall] ${sys_num} ${arg1} ${arg2} ${arg3}`);
+                        // Force no retry — run once
+                        return await originalSyscall(sys_num, arg1, arg2, arg3);
+                    };
+                }
+            } catch(e) {}
+        };
+        disableAutoRetry();
+
+        // Launch the custom exploit (your mansoor0x + kernel_bagagwa)
         document.getElementById('startButton').addEventListener('click', () => {
             window.logger.log("Redirecting to active research session interface...");
-            window.location.href = "exploit.html";
+            window.location.href = "exploit.html?fw=13.60&go=1";
         });
     </script>
 </body>
