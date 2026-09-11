@@ -1,104 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>PS5 Research Framework</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PS5 13.60</title>
     <style>
-        :root {
-            --bg: #0a0a0f;
-            --text: #c0c0d0;
-            --accent: #00d4aa;
-            --warn: #f0a000;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            min-height: 100vh;
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            height: 100vh;
+            margin: 0;
         }
-        .container {
-            max-width: 600px;
-            text-align: center;
+        #status {
+            font-size: 24px;
+            margin-bottom: 20px;
         }
-        h1 { 
-            font-size: 24px; 
-            margin-bottom: 10px;
-            color: var(--accent);
-        }
-        .subtitle {
-            font-size: 14px;
-            opacity: 0.7;
-            margin-bottom: 40px;
-        }
-        .fw-select {
-            margin-bottom: 30px;
-        }
-        select {
-            background: #1a1a25;
-            color: var(--text);
-            border: 1px solid #333;
-            padding: 12px 24px;
-            font-size: 16px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        .btn {
-            display: inline-block;
-            background: var(--accent);
-            color: #000;
-            padding: 16px 48px;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: opacity 0.2s;
-        }
-        .btn:hover { opacity: 0.9; }
-        .disclaimer {
-            margin-top: 40px;
+        #log {
+            width: 80%;
+            height: 60%;
+            background: #111;
+            border: 1px solid #0f0;
+            padding: 10px;
+            overflow-y: auto;
             font-size: 12px;
-            opacity: 0.5;
-            max-width: 400px;
-            line-height: 1.6;
         }
+        .line { margin: 2px 0; }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .info { color: #ff0; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>PS5 Research Framework</h1>
-        <p class="subtitle">Educational security research platform</p>
-        
-        <div class="fw-select">
-            <select id="fw-select">
-                <option value="3.00">Firmware 13.60</option>
-            </select>
-        </div>
-        
-        <a href="#" class="btn" id="start-btn">Initialize Research</a>
-        
-        <p class="disclaimer">
-            This tool is for authorized security research only. 
-            Use only on systems you own and have permission to test.
-        </p>
-    </div>
-
+    <div id="status">Initializing...</div>
+    <div id="log"></div>
+    
     <script>
-        // Service Worker Registration
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
-        }
-        
-        document.getElementById('start-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            const fw = document.getElementById('fw-select').value;
-            window.location.href = `exploit.html?fw=${fw}&go=1`;
-        });
+        window.fw = {
+            log: (msg, type = 'info') => {
+                const log = document.getElementById('log');
+                const line = document.createElement('div');
+                line.className = `line ${type}`;
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                log.appendChild(line);
+                log.scrollTop = log.scrollHeight;
+                console.log(msg);
+            },
+            setStatus: (msg) => {
+                document.getElementById('status').textContent = msg;
+            }
+        };
     </script>
+    <script type="module" src="exploit.js"></script>
 </body>
 </html>
