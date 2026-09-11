@@ -1,11 +1,11 @@
 "use strict";
 
-// Kernel research stage interface.
+// Kernel telemetry test run interface.
 //
 // This module consumes the already-proven userland context and reports research
 // readiness/proof state. It does not auto-run or perform destructive actions.
 (function () {
-    const STAGE_NAME = "bagagwa-aio-research";
+    const STAGE_NAME = "kernel-telemetry-test-run-1";
 
     function asHex(value) {
         if (!Number.isFinite(value))
@@ -38,7 +38,7 @@
             libcBaseReady: hasNumber(ctx, "libcBase"),
             libkernelBaseReady: hasNumber(ctx, "libkernelBase"),
             realKernelBaseKnown: false,
-            syscallBridgeReady: false,
+            syscallBridgeReady: typeof ctx.syscall === "function",
             aioUafValidated: false,
             aioDebugLeakValidated: false,
             decrementPrimitiveValidated: false,
@@ -80,11 +80,26 @@
 
         mark(ctx, "KERNEL-STAGE-PASS",
             "userland-context-ready=true-real-kernel-base=false");
+        mark(ctx, "KERNEL-TELEMETRY-BEGIN",
+            "mode=non-destructive-no-uaf-no-write");
+        mark(ctx, report.syscallBridgeReady
+            ? "SYSCALL-BRIDGE-CANDIDATE"
+            : "SYSCALL-BRIDGE-MISSING",
+            `type=${typeof ctx.syscall}`);
+        mark(ctx, "SYSCALL-727-NOT-ATTEMPTED",
+            "reason=syscall-bridge-not-validated");
+        mark(ctx, "AIO-MULTI-WAIT-NOT-ATTEMPTED",
+            "reason=no-object-corruption-in-telemetry-run");
+        mark(ctx, "KERNEL-LEAK-CANDIDATE",
+            "observed=false-real-kernel-base=false");
+        mark(ctx, "KERNEL-EXPLOIT-NOT-ATTEMPTED",
+            "telemetry-only=true");
         mark(ctx, "KERNEL-RESEARCH-GAPS",
-            "syscall-bridge=false-aio-uaf=false-sys727-leak=false"
+            `syscall-bridge=${report.syscallBridgeReady}`
+            + "-aio-uaf=false-sys727-leak=false"
             + "-decrement=false-osem=false");
         mark(ctx, "KERNEL-STAGE-END",
-            "instrumentation-only=true-no-kernel-payload-run=true");
+            "telemetry-complete=true-no-kernel-payload-run=true");
 
         return report;
     }

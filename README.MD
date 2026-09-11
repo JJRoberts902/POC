@@ -41,8 +41,10 @@ This repository provides a structural framework for:
 `exploit.html` loads `modules/kernel_bagagwa.js` before `modules/exploit.js`.
 When the userland stage validates its read primitive, module bases, and native
 notification context, `modules/exploit.js` builds a research context and calls
-`window.PS5KernelResearch.analyze(ctx)`. The kernel stage reports readiness and
-remaining research gaps, then control returns to the existing notification proof.
+`window.PS5KernelResearch.analyze(ctx)`. The kernel stage runs Kernel Telemetry
+Test Run 1: it reports whether a syscall bridge is present, records that syscall
+727 and the AIO path were not attempted, marks the exploit as not attempted, and
+then returns control to the existing notification proof.
 
 ## Disclaimer
 
