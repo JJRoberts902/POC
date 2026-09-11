@@ -15,7 +15,7 @@ This repository provides a structural framework for:
 - `exploit.html` - Research session interface
 - `modules/framework.js` - Core research framework
 - `modules/exploit.js` - Userland analysis module
-- `modules/kernel_bagagwa.js` - Kernel research interface
+- `modules/kernel_bagagwa.js` - Kernel research stage interface, called after userland context validation
 
 ## Usage
 
@@ -35,6 +35,14 @@ This repository provides a structural framework for:
 - Syscall interface analysis
 - Memory management study
 - Security primitive documentation
+
+## Runtime Flow
+
+`exploit.html` loads `modules/kernel_bagagwa.js` before `modules/exploit.js`.
+When the userland stage validates its read primitive, module bases, and native
+notification context, `modules/exploit.js` builds a research context and calls
+`window.PS5KernelResearch.analyze(ctx)`. The kernel stage reports readiness and
+remaining research gaps, then control returns to the existing notification proof.
 
 ## Disclaimer
 
