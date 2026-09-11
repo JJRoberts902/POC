@@ -5,7 +5,7 @@
 // This module consumes the already-proven userland context and reports research
 // readiness/proof state. It does not auto-run or perform destructive actions.
 (function () {
-    const STAGE_NAME = "kernel-telemetry-test-run-1";
+    const STAGE_NAME = "kernel-handoff-test-run-2";
 
     function asHex(value) {
         if (!Number.isFinite(value))
@@ -66,6 +66,10 @@
             + `-libc=${asHex(ctx.libcBase)}`
             + `-libkernel=${asHex(ctx.libkernelBase)}`
             + `-notify=${asHex(ctx.notifyEntryAddress)}`);
+        mark(ctx, "KERNEL-NOTIFY-GATE",
+            `notify-ready=${!!ctx.notifyReady}`
+            + `-carrier-armed=${!!ctx.carrierArmedForCommit}`
+            + `-commit-block=${!!ctx.commitBlockConfirmed}`);
 
         if (!report.readyForKernelResearch) {
             mark(ctx, "KERNEL-STAGE-BLOCKED",

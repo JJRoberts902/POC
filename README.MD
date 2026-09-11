@@ -41,10 +41,12 @@ This repository provides a structural framework for:
 `exploit.html` loads `modules/kernel_bagagwa.js` before `modules/exploit.js`.
 When the userland stage validates its read primitive, module bases, and native
 notification context, `modules/exploit.js` builds a research context and calls
-`window.PS5KernelResearch.analyze(ctx)`. The kernel stage runs Kernel Telemetry
-Test Run 1: it reports whether a syscall bridge is present, records that syscall
-727 and the AIO path were not attempted, marks the exploit as not attempted, and
-then returns control to the existing notification proof.
+`window.PS5KernelResearch.analyze(ctx)`. Kernel Handoff Test Run 2 starts as
+soon as `MODULE-IMPORT-LEAK-PASS` is reached, before the final notification
+commit gate. It reports whether the handoff ran, whether a syscall bridge is
+present, and the state of the notify gate booleans. It records that syscall 727
+and the AIO path were not attempted, marks the exploit as not attempted, and
+then leaves the existing notification proof untouched.
 
 ## Disclaimer
 
