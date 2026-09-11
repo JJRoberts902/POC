@@ -1,66 +1,58 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PS5 13.60 Debug</title>
+    <title>PS5 Research Framework (Firmware 13.60)</title>
     <style>
-        body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
-        .error { color: #f00; }
-        .ok { color: #0f0; }
+        body { background-color: #121212; color: #00ff00; font-family: monospace; padding: 20px; }
+        #terminal { background-color: #000; border: 1px solid #00ff00; padding: 15px; height: 400px; overflow-y: scroll; margin-bottom: 20px; }
+        .error { color: #ff3333; }
+        .success { color: #33ff33; }
+        button { background-color: #00ff00; color: #000; border: none; padding: 10px 20px; font-family: monospace; font-weight: bold; cursor: pointer; }
+        button:hover { background-color: #00cc00; }
     </style>
 </head>
 <body>
-    <h2>PS5 Browser Detection</h2>
-    <div id="out"></div>
+    <h1>PS5 Architecture Research Platform</h1>
+    <p>Target Environment: Firmware 13.60</p>
     
+    <div id="terminal">
+        <div>[!] Framework ready. Awaiting user initialization...</div>
+    </div>
+
+    <button id="startButton">Launch Research Session</button>
+
     <script>
-        const out = document.getElementById('out');
-        const log = (msg, cls) => {
-            out.innerHTML += `<div class="${cls}">${msg}</div>`;
+        const logTerminal = document.getElementById('terminal');
+        
+        // Global logging utility accessible by all imported modules
+        window.logger = {
+            log: function(msg) {
+                let div = document.createElement('div');
+                div.innerText = `[*] ${msg}`;
+                logTerminal.appendChild(div);
+                logTerminal.scrollTop = logTerminal.scrollHeight;
+            },
+            success: function(msg) {
+                let div = document.createElement('div');
+                div.className = 'success';
+                div.innerText = `[+] ${msg}`;
+                logTerminal.appendChild(div);
+                logTerminal.scrollTop = logTerminal.scrollHeight;
+            },
+            error: function(msg) {
+                let div = document.createElement('div');
+                div.className = 'error';
+                div.innerText = `[-] ERROR: ${msg}`;
+                logTerminal.appendChild(div);
+                logTerminal.scrollTop = logTerminal.scrollHeight;
+            }
         };
-        
-        // User Agent
-        log('User Agent: ' + navigator.userAgent, 'ok');
-        
-        // Check features
-        const checks = [
-            ['BigInt', typeof BigInt],
-            ['WebAssembly', typeof WebAssembly],
-            ['WebAssembly.Memory', typeof WebAssembly?.Memory],
-            ['SharedArrayBuffer', typeof SharedArrayBuffer],
-            ['Atomics', typeof Atomics],
-            ['Worker', typeof Worker],
-            ['MessageChannel', typeof MessageChannel]
-        ];
-        
-        log('<br>Feature Check:', 'ok');
-        for (const [name, type] of checks) {
-            const ok = type !== 'undefined';
-            log(`  ${name}: ${ok ? 'OK' : 'MISSING'}`, ok ? 'ok' : 'error');
-        }
-        
-        // Check window properties
-        log('<br>Window Check:', 'ok');
-        log(`  window.location: ${window.location}`, 'ok');
-        log(`  document.domain: ${document.domain}`, 'ok');
-        
-        // Try to create SharedArrayBuffer
-        log('<br>SAB Test:', 'ok');
-        try {
-            const sab = new SharedArrayBuffer(1024);
-            log('  Created SAB: OK', 'ok');
-        } catch(e) {
-            log('  SAB Error: ' + e.message, 'error');
-        }
-        
-        // Try WebAssembly
-        log('<br>WASM Test:', 'ok');
-        try {
-            const mem = new WebAssembly.Memory({ initial: 1 });
-            log('  Created WASM Memory: OK', 'ok');
-        } catch(e) {
-            log('  WASM Error: ' + e.message, 'error');
-        }
+
+        document.getElementById('startButton').addEventListener('click', () => {
+            window.logger.log("Redirecting to active research session interface...");
+            window.location.href = "exploit.html";
+        });
     </script>
 </body>
 </html>
