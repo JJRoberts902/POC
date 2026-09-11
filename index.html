@@ -1,35 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PS5 13.60</title>
     <style>
         body {
             background: #000;
             color: #0f0;
             font-family: monospace;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
             margin: 0;
+            padding: 20px;
         }
         #status {
-            font-size: 24px;
-            margin-bottom: 20px;
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #0ff;
         }
         #log {
-            width: 80%;
-            height: 60%;
             background: #111;
             border: 1px solid #0f0;
             padding: 10px;
+            height: 80vh;
             overflow-y: auto;
             font-size: 12px;
+            white-space: pre-wrap;
         }
-        .line { margin: 2px 0; }
         .error { color: #f00; }
         .success { color: #0f0; }
         .info { color: #ff0; }
@@ -40,21 +35,53 @@
     <div id="log"></div>
     
     <script>
-        window.fw = {
-            log: (msg, type = 'info') => {
-                const log = document.getElementById('log');
-                const line = document.createElement('div');
-                line.className = `line ${type}`;
-                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-                log.appendChild(line);
-                log.scrollTop = log.scrollHeight;
-                console.log(msg);
-            },
-            setStatus: (msg) => {
-                document.getElementById('status').textContent = msg;
-            }
+        // Logging
+        const log = (msg, type) => {
+            const div = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const span = document.createElement('div');
+            span.className = type || '';
+            span.textContent = `[${time}] ${msg}`;
+            div.appendChild(span);
+            div.scrollTop = div.scrollHeight;
         };
+        
+        const setStatus = (msg) => {
+            document.getElementById('status').textContent = msg;
+        };
+        
+        // Check features
+        const check = () => {
+            const features = {
+                BigInt: typeof BigInt,
+                WebAssembly: typeof WebAssembly,
+                SharedArrayBuffer: typeof SharedArrayBuffer
+            };
+            
+            log('Checking environment...', 'info');
+            for (const [name, type] of Object.entries(features)) {
+                const ok = type !== 'undefined';
+                log(`  ${name}: ${ok ? 'OK' : 'MISSING'}`, ok ? 'success' : 'error');
+            }
+            
+            if (features.SharedArrayBuffer === 'undefined') {
+                log('', 'info');
+                log('WARNING: SharedArrayBuffer not available', 'error');
+                log('This is normal in desktop browsers', 'info');
+                log('Exploit requires PS5 browser environment', 'info');
+            }
+            
+            return features;
+        };
+        
+        // Run
+        setTimeout(() => {
+            check();
+            log('', 'info');
+            log('PS5 13.60 Exploit Framework', 'success');
+            log('Ready for kernel integration', 'info');
+            setStatus('Ready');
+        }, 100);
     </script>
-    <script type="module" src="exploit.js"></script>
 </body>
 </html>
