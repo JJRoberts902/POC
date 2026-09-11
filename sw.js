@@ -1,26 +1,38 @@
-/**
- * Service Worker for offline capability
- */
-
-const CACHE_NAME = 'research-framework-v1';
-const urlsToCache = [
-    '/',
-    '/exploit.html',
-    '/modules/framework.js',
-    '/modules/exploit.js',
-    '/modules/kernel_bagagwa.js'
+const V = "ps5poc-v1";
+const SHELL = [
+  "/", "/index.html", "/exploit.html",
+  "/modules/offsets.mjs", "/modules/exploit.js",
 ];
 
-self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(urlsToCache))
-    );
+self.addEventListener("install", e => {
+  e.waitUntil(
+    caches.open(V)
+      .then(c => c.addAll(SHELL))
+      .catch(() => {})
+      .then(() => self.skipWaiting())
+  );
 });
 
-self.addEventListener('fetch', (event) => {
-    event.respondWith(
-        caches.match(event.request)
-            .then(response => response || fetch(event.request))
-    );
+self.addEventListener("activate", e => {
+  e.waitUntil(
+    caches.keys()
+      .then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", e => {
+  if (e.request.method !== "GET") return;
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      const net = fetch(e.request).then(r => {
+        if (r.ok) {
+          const cl = r.clone();
+          caches.open(V).then(c => c.put(e.request, cl));
+        }
+        return r;
+      }).catch(() => null);
+      return cached || net;
+    })
+  );
 });
