@@ -1,18 +1,20 @@
-const V = "ps5poc-v11";
+const V = "ps5poc-v12";
+
 const SHELL = [
-  "./", "./index.html", "./exploit.html",
+  "./",
+  "./index.html",
+  "./exploit.html",
   "./modules/offsets.mjs",
-  "./modules/native_provider.js",
-  "./modules/krw_provider.js",
-  "./modules/kernel_bagagwa.js",
-  "./modules/exploit.js",
+  "./modules/native_provider.js?v=1",
+  "./modules/krw_provider.js?v=1",
+  "./modules/kernel_bagagwa.js?v=1",
+  "./modules/exploit.js?v=1",
 ];
 
 self.addEventListener("install", e => {
   e.waitUntil(
     caches.open(V)
       .then(c => c.addAll(SHELL))
-      .catch(() => {})
       .then(() => self.skipWaiting())
   );
 });
@@ -20,23 +22,37 @@ self.addEventListener("install", e => {
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
-      .then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k))))
+      .then(keys =>
+        Promise.all(
+          keys
+            .filter(key => key !== V)
+            .map(key => caches.delete(key))
+        )
+      )
       .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+
   e.respondWith(
     caches.match(e.request).then(cached => {
-      const net = fetch(e.request).then(r => {
-        if (r.ok) {
-          const cl = r.clone();
-          caches.open(V).then(c => c.put(e.request, cl));
-        }
-        return r;
-      }).catch(() => null);
-      return cached || net;
+      const network = fetch(e.request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+
+            caches.open(V).then(cache => {
+              cache.put(e.request, copy);
+            });
+          }
+
+          return response;
+        })
+        .catch(() => null);
+
+      return cached || network;
     })
   );
 });
