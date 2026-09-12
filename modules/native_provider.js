@@ -5,7 +5,9 @@
         generic: null,
         syscall: null,
         genericResult: null,
-        syscallResult: null
+        syscallResult: null,
+        pointerProbe: null,
+        pointerResult: null
     };
 
     function mark(ctx, tag, extra) {
@@ -268,10 +270,96 @@
         return result;
     }
 
+
+    function registerPointerProbe(provider) {
+        validateProvider(provider, "pointer-diagnostic");
+        state.pointerProbe = provider;
+        state.pointerResult = null;
+        return { registered: true, name: provider.name, firmware: provider.firmware };
+    }
+
+    function clearPointerProbe() {
+        state.pointerProbe = null;
+        state.pointerResult = null;
+    }
+
+    async function evaluatePointerProbe(ctx, syscallResult) {
+        if (!syscallResult || syscallResult.ready !== true) {
+            const result = { ready: false, registered: !!state.pointerProbe, reason: "syscall-bridge-not-ready" };
+            state.pointerResult = result;
+            mark(ctx, "POINTER-MARSHALLING-STATUS",
+                `ready=false-registered=${!!state.pointerProbe}-reason=syscall-bridge-not-ready`);
+            return result;
+        }
+
+        const provider = state.pointerProbe;
+        if (!provider) {
+            const result = { ready: false, registered: false, reason: "provider-missing" };
+            state.pointerResult = result;
+            mark(ctx, "POINTER-MARSHALLING-STATUS",
+                "ready=false-registered=false-reason=provider-missing");
+            return result;
+        }
+
+        const firmware = ctx && ctx.firmware || "unknown";
+        if (!firmwareMatches(provider, firmware)) {
+            const result = { ready: false, registered: true, name: provider.name, reason: "firmware-mismatch" };
+            state.pointerResult = result;
+            mark(ctx, "POINTER-MARSHALLING-STATUS",
+                `ready=false-registered=true-name=${provider.name}-reason=firmware-mismatch`);
+            return result;
+        }
+
+        let raw;
+        try {
+            raw = await provider.selfTest({ firmware, mark: (tag, extra) => mark(ctx, tag, extra) });
+        } catch (error) {
+            const result = { ready: false, registered: true, name: provider.name, reason: "selftest-threw" };
+            state.pointerResult = result;
+            mark(ctx, "POINTER-MARSHALLING-STATUS",
+                `ready=false-registered=true-name=${provider.name}-reason=selftest-threw`);
+            return result;
+        }
+
+        raw = raw || {};
+        const ready = raw.pass === true
+            && raw.scope === "userland-pointer-diagnostic"
+            && raw.addressObserved === true
+            && raw.roundTripVerified === true
+            && raw.returnedToUserland === true;
+        const result = {
+            ready,
+            registered: true,
+            name: provider.name,
+            addressObserved: raw.addressObserved === true,
+            roundTripVerified: raw.roundTripVerified === true,
+            returnedToUserland: raw.returnedToUserland === true,
+            scope: raw.scope || "unknown",
+            reason: ready ? null : "pointer-marshalling-not-proven"
+        };
+        state.pointerResult = result;
+        mark(ctx, ready ? "POINTER-MARSHALLING-READY" : "POINTER-MARSHALLING-STATUS",
+            `ready=${ready}-registered=true-name=${provider.name}`
+            + `-address-observed=${result.addressObserved}`
+            + `-roundtrip=${result.roundTripVerified}`
+            + `-returned=${result.returnedToUserland}`
+            + (result.reason ? `-reason=${result.reason}` : ""));
+        return result;
+    }
+
+    function getFrameworkStatus() {
+        return {
+            genericApi: typeof registerGeneric === "function" && typeof evaluateGeneric === "function",
+            syscallApi: typeof registerSyscall === "function" && typeof evaluateSyscall === "function",
+            pointerApi: typeof registerPointerProbe === "function" && typeof evaluatePointerProbe === "function"
+        };
+    }
+
     async function evaluate(ctx) {
         const generic = await evaluateGeneric(ctx || {});
         const syscall = await evaluateSyscall(ctx || {}, generic);
-        return { generic, syscall };
+        const pointer = await evaluatePointerProbe(ctx || {}, syscall);
+        return { generic, syscall, pointer };
     }
 
     function getStatus() {
@@ -285,18 +373,28 @@
                 registered: !!state.syscall,
                 name: state.syscall && state.syscall.name || null,
                 result: state.syscallResult
-            }
+            },
+            pointer: {
+                registered: !!state.pointerProbe,
+                name: state.pointerProbe && state.pointerProbe.name || null,
+                result: state.pointerResult
+            },
+            framework: getFrameworkStatus()
         };
     }
 
     window.PS5UserlandNativeProvider = {
         registerGeneric,
         registerSyscall,
+        registerPointerProbe,
         clearGeneric,
         clearSyscall,
+        clearPointerProbe,
         evaluate,
         evaluateGeneric,
         evaluateSyscall,
+        evaluatePointerProbe,
+        getFrameworkStatus,
         getStatus
     };
 })();

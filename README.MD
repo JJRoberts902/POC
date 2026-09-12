@@ -1,28 +1,28 @@
-Stages :
-Userland: PASS
-Notify/native call: PASS
-Userland native interface ready: PASS
-Generic native call: REQUIRES INDIVIDUAL CAPABILITY PROOFS
-Syscall bridge: BLOCKED UNTIL GENERIC NATIVE CALL IS READY
-Second-stage module loaded: PASS
-Kernel R/W: NOT RUNNING
-Kernel payload: NOT RUNNING
+# PS5 POC — v11 boundary-ready framework
 
-Notes:
-- No scratch/mock native provider is installed.
-- v10 fixes diagnostic ordering. Provider registration is no longer reported as the first blocker when target selection, argument control, or repeatability have not been proven.
-- The current proven path is identified as target-model=fixed-notify and argument-model=fixed-notify-layout.
-- A real generic provider must explicitly prove targetSelectable, argumentsControlled, and repeatable before GENERIC-NATIVE-CALL-READY can pass.
-- A real syscall provider must explicitly prove dispatchVerified, scalarArgsVerified, and repeatable before SYSCALL-BRIDGE-READY can pass.
-- Pointer marshalling is tracked separately after a syscall bridge is ready.
-- Kernel R/W remains false until a genuine kernel-backed provider is verified.
+This build keeps runtime proof honest while completing the provider/framework plumbing around the current userland stage.
 
-## v10 ordered diagnostics
+## Proven runtime stages
+- Userland primitive
+- Native notify execution
+- Native return/restoration
+- Stage handoff
+- Arena / notify proof
 
-After NOTIFY-NATIVE-CALL-PASS, look for:
-- NATIVE-CAPABILITY-DIAG
-- NATIVE-PROOF-MATRIX
-- NATIVE-NEXT-BLOCKER
-- GENERIC-NATIVE-REQUIREMENTS
+## Framework/API stages
+The UI now separately reports framework readiness for:
+- generic native provider API
+- syscall provider API
+- pointer diagnostic API
+- kernel R/W provider API
 
-With the current notify-only implementation and no real generic provider, the expected first blocker is target-selection-not-proven.
+These framework checks may pass even while the corresponding runtime capability remains unproven. They are intentionally separate.
+
+## Runtime capability gates still require real proof
+- Generic native call
+- Syscall bridge
+- Pointer marshalling
+- Kernel exploit primitive
+- Kernel R/W
+
+No scratch provider or simulated K/RW pass is installed by this build.
