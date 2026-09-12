@@ -287,7 +287,7 @@ $("btn").addEventListener("click", () => {
 
 // ── Service Worker
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js")
+  navigator.serviceWorker.register("./sw.js")
     .then(r => {
       const sw = r.installing || r.waiting || r.active;
       const show = () => {
