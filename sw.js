@@ -1,7 +1,8 @@
-const V = "ps5poc-v7";
+const V = "ps5poc-v8";
 const SHELL = [
   "./", "./index.html", "./exploit.html",
   "./modules/offsets.mjs",
+  "./modules/native_provider.js",
   "./modules/krw_provider.js",
   "./modules/kernel_bagagwa.js",
   "./modules/exploit.js",
