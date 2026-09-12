@@ -299,26 +299,61 @@
         const arenaOK = !!(ctx && ctx.arenaView && Number.isFinite(ctx.arenaBacking));
         const userlandOK = !!(ctx && ctx.leakPass && ctx.notifyReady && ctx.gotReadOK);
         const firmwareOK = firmware === requiredFirmware;
-        const handoffOK = firmwareOK && userlandOK && webkitOK && libkernelOK && arenaOK;
-        const kernelRWOK = await evaluateKernelRWProof(ctx);
 
-        const report = {
-            stage: STAGE,
-            firmware,
-            requiredFirmware,
-            firmwareOK,
-            leakPass: !!(ctx && ctx.leakPass),
-            notifyReady: !!(ctx && ctx.notifyReady),
-            gotReadOK: !!(ctx && ctx.gotReadOK),
-            userlandOK,
-            handoffOK,
-            kernelRWOK,
-            webkitOK,
-            libcOK,
-            libkernelOK,
-            arenaOK
-        };
+const handoffOK =
+    firmwareOK &&
+    userlandOK &&
+    webkitOK &&
+    libkernelOK &&
+    arenaOK;
 
+const providerFrameworkOK =
+    !!(window.PS5KRWProvider
+        && typeof window.PS5KRWProvider.register === "function"
+        && typeof window.PS5KRWProvider.getStatus === "function"
+        && typeof window.PS5KRWProvider.selfTest === "function");
+
+const kernelInterfaceReady =
+    handoffOK &&
+    libcOK &&
+    providerFrameworkOK;
+
+mark(ctx,
+    "KERNEL-INTERFACE-READY",
+    `pass=${kernelInterfaceReady}`
+    + `-handoff=${handoffOK}`
+    + `-fw=${firmwareOK}`
+    + `-webkit=${webkitOK}`
+    + `-libc=${libcOK}`
+    + `-libkernel=${libkernelOK}`
+    + `-arena=${arenaOK}`
+    + `-provider-framework=${providerFrameworkOK}`);
+
+const kernelRWOK = await evaluateKernelRWProof(ctx);
+
+       const report = {
+    stage: STAGE,
+    firmware,
+    requiredFirmware,
+    firmwareOK,
+
+    leakPass: !!(ctx && ctx.leakPass),
+    notifyReady: !!(ctx && ctx.notifyReady),
+    gotReadOK: !!(ctx && ctx.gotReadOK),
+
+    userlandOK,
+    handoffOK,
+
+    kernelInterfaceReady,
+    providerFrameworkOK,
+
+    kernelRWOK,
+
+    webkitOK,
+    libcOK,
+    libkernelOK,
+    arenaOK
+};
         mark(ctx, "BAGAGWA-PROBE",
             `fw=${report.firmware}`
             + `-required-fw=${report.requiredFirmware}`
