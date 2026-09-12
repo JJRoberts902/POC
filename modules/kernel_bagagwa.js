@@ -216,23 +216,81 @@
         return report;
     }
 
-    function evaluateKernelRWProof(ctx) {
-        const proof = ctx && ctx.kernelRWProof;
-        const readOK = !!(proof && proof.read === true);
-        const writeOK = !!(proof && proof.write === true);
-        const verifyOK = !!(proof && proof.verify === true);
-        const pass = readOK && writeOK && verifyOK;
+    async function evaluateKernelRWProof(ctx) {
+    let providerState = null;
 
-        mark(ctx, "KERNEL-RW-STATUS",
-            `read=${readOK}`
-            + `-write=${writeOK}`
-            + `-verify=${verifyOK}`
-            + `-pass=${pass}`);
+    if (window.PS5KRWProvider
+        && typeof window.PS5KRWProvider.selfTest === "function") {
 
-        return pass;
+        providerState =
+            await window.PS5KRWProvider.selfTest(ctx);
     }
 
-    function probe(ctx) {
+    const legacyProof = ctx && ctx.kernelRWProof;
+
+    const legacyRead =
+        !!(legacyProof && legacyProof.read === true);
+
+    const legacyWrite =
+        !!(legacyProof && legacyProof.write === true);
+
+    const legacyVerify =
+        !!(legacyProof && legacyProof.verify === true);
+
+    const legacyPass =
+        legacyRead &&
+        legacyWrite &&
+        legacyVerify;
+
+    /*
+     * Provider self-test only counts as actual kernel R/W when
+     * the provider reports a kernel-scoped verification.
+     *
+     * scratch provider therefore stays FALSE here.
+     */
+    const providerKernelPass =
+        !!(providerState
+            && providerState.pass === true
+            && providerState.kernelVerified === true);
+
+    const pass =
+        legacyPass ||
+        providerKernelPass;
+
+    const readOK =
+        providerKernelPass
+            ? providerState.read
+            : legacyRead;
+
+    const writeOK =
+        providerKernelPass
+            ? providerState.write
+            : legacyWrite;
+
+    const verifyOK =
+        providerKernelPass
+            ? providerState.verify
+            : legacyVerify;
+
+    const source =
+        providerKernelPass
+            ? "provider"
+            : legacyPass
+                ? "legacy-proof"
+                : "none";
+
+    mark(ctx,
+        "KERNEL-RW-STATUS",
+        `read=${readOK}`
+        + `-write=${writeOK}`
+        + `-verify=${verifyOK}`
+        + `-pass=${pass}`
+        + `-source=${source}`);
+
+    return pass;
+}
+
+    async function probe(ctx) {
         const firmware = ctx && ctx.firmware || "unknown";
         const requiredFirmware = ctx && ctx.kernelStageFirmware || "13.60";
         const webkitOK = !!(ctx && Number.isFinite(ctx.webkitBase));
@@ -242,7 +300,7 @@
         const userlandOK = !!(ctx && ctx.leakPass && ctx.notifyReady && ctx.gotReadOK);
         const firmwareOK = firmware === requiredFirmware;
         const handoffOK = firmwareOK && userlandOK && webkitOK && libkernelOK && arenaOK;
-        const kernelRWOK = evaluateKernelRWProof(ctx);
+        const kernelRWOK = await evaluateKernelRWProof(ctx);
 
         const report = {
             stage: STAGE,
