@@ -1,14 +1,14 @@
-const V = "ps5poc-v12";
+const V = "ps5poc-diagnostics-v13";
 
 const SHELL = [
   "./",
   "./index.html",
   "./exploit.html",
   "./modules/offsets.mjs",
-  "./modules/native_provider.js?v=1",
-  "./modules/krw_provider.js?v=1",
-  "./modules/kernel_bagagwa.js?v=1",
-  "./modules/exploit.js?v=1",
+  "./modules/native_provider.js?v=13",
+  "./modules/krw_provider.js?v=13",
+  "./modules/kernel_bagagwa.js?v=13",
+  "./modules/exploit.js?v=13",
 ];
 
 self.addEventListener("install", e => {
