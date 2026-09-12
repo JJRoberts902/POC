@@ -216,7 +216,11 @@
         return report;
     }
 
-    function probe(ctx) {
+  function probe(ctx) {
+    const webkitOK = !!(ctx && Number.isFinite(ctx.webkitBase));
+    const libcOK = !!(ctx && Number.isFinite(ctx.libcBase));
+    const libkernelOK = !!(ctx && Number.isFinite(ctx.libkernelBase));
+
     const report = {
         stage: STAGE,
         firmware: ctx && ctx.firmware || "unknown",
@@ -224,9 +228,10 @@
         notifyReady: !!(ctx && ctx.notifyReady),
         gotReadOK: !!(ctx && ctx.gotReadOK),
         hasArena: !!(ctx && ctx.arenaView && Number.isFinite(ctx.arenaBacking)),
-        hasBases: !!(ctx && Number.isFinite(ctx.webkitBase)
-            && Number.isFinite(ctx.libcBase)
-            && Number.isFinite(ctx.libkernelBase))
+        webkitOK,
+        libcOK,
+        libkernelOK,
+        hasBases: webkitOK && libcOK && libkernelOK
     };
 
     mark(ctx, "BAGAGWA-PROBE",
@@ -234,8 +239,15 @@
         + `-leak=${report.leakPass}`
         + `-notify=${report.notifyReady}`
         + `-read=${report.gotReadOK}`
-        + `-bases=${report.hasBases}`
+        + `-webkit=${report.webkitOK}`
+        + `-libc=${report.libcOK}`
+        + `-libkernel=${report.libkernelOK}`
         + `-arena=${report.hasArena}`);
+
+    mark(ctx, "BAGAGWA-BASE-VALUES",
+        `webkit=${ctx && ctx.webkitBase}`
+        + `-libc=${ctx && ctx.libcBase}`
+        + `-libkernel=${ctx && ctx.libkernelBase}`);
 
     mark(ctx, "BAGAGWA-PROBE-PASS", "handoff-only=true");
     return report;
