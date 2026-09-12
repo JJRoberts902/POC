@@ -216,42 +216,75 @@
         return report;
     }
 
-  function probe(ctx) {
-    const webkitOK = !!(ctx && Number.isFinite(ctx.webkitBase));
-    const libcOK = !!(ctx && Number.isFinite(ctx.libcBase));
-    const libkernelOK = !!(ctx && Number.isFinite(ctx.libkernelBase));
+    function evaluateKernelRWProof(ctx) {
+        const proof = ctx && ctx.kernelRWProof;
+        const readOK = !!(proof && proof.read === true);
+        const writeOK = !!(proof && proof.write === true);
+        const verifyOK = !!(proof && proof.verify === true);
+        const pass = readOK && writeOK && verifyOK;
 
-    const report = {
-        stage: STAGE,
-        firmware: ctx && ctx.firmware || "unknown",
-        leakPass: !!(ctx && ctx.leakPass),
-        notifyReady: !!(ctx && ctx.notifyReady),
-        gotReadOK: !!(ctx && ctx.gotReadOK),
-        hasArena: !!(ctx && ctx.arenaView && Number.isFinite(ctx.arenaBacking)),
-        webkitOK,
-        libcOK,
-        libkernelOK,
-        hasBases: webkitOK && libkernelOK
-    };
+        mark(ctx, "KERNEL-RW-STATUS",
+            `read=${readOK}`
+            + `-write=${writeOK}`
+            + `-verify=${verifyOK}`
+            + `-pass=${pass}`);
 
-    mark(ctx, "BAGAGWA-PROBE",
-        `fw=${report.firmware}`
-        + `-leak=${report.leakPass}`
-        + `-notify=${report.notifyReady}`
-        + `-read=${report.gotReadOK}`
-        + `-webkit=${report.webkitOK}`
-        + `-libc=${report.libcOK}`
-        + `-libkernel=${report.libkernelOK}`
-        + `-arena=${report.hasArena}`);
+        return pass;
+    }
 
-    mark(ctx, "BAGAGWA-BASE-VALUES",
-        `webkit=${ctx && ctx.webkitBase}`
-        + `-libc=${ctx && ctx.libcBase}`
-        + `-libkernel=${ctx && ctx.libkernelBase}`);
+    function probe(ctx) {
+        const firmware = ctx && ctx.firmware || "unknown";
+        const requiredFirmware = ctx && ctx.kernelStageFirmware || "13.60";
+        const webkitOK = !!(ctx && Number.isFinite(ctx.webkitBase));
+        const libcOK = !!(ctx && Number.isFinite(ctx.libcBase));
+        const libkernelOK = !!(ctx && Number.isFinite(ctx.libkernelBase));
+        const arenaOK = !!(ctx && ctx.arenaView && Number.isFinite(ctx.arenaBacking));
+        const userlandOK = !!(ctx && ctx.leakPass && ctx.notifyReady && ctx.gotReadOK);
+        const firmwareOK = firmware === requiredFirmware;
+        const handoffOK = firmwareOK && userlandOK && webkitOK && libkernelOK && arenaOK;
+        const kernelRWOK = evaluateKernelRWProof(ctx);
 
-    mark(ctx, "BAGAGWA-PROBE-PASS", "handoff-only=true");
-    return report;
-}
+        const report = {
+            stage: STAGE,
+            firmware,
+            requiredFirmware,
+            firmwareOK,
+            leakPass: !!(ctx && ctx.leakPass),
+            notifyReady: !!(ctx && ctx.notifyReady),
+            gotReadOK: !!(ctx && ctx.gotReadOK),
+            userlandOK,
+            handoffOK,
+            kernelRWOK,
+            webkitOK,
+            libcOK,
+            libkernelOK,
+            arenaOK
+        };
+
+        mark(ctx, "BAGAGWA-PROBE",
+            `fw=${report.firmware}`
+            + `-required-fw=${report.requiredFirmware}`
+            + `-fw-ok=${report.firmwareOK}`
+            + `-userland=${report.userlandOK}`
+            + `-notify=${report.notifyReady}`
+            + `-read=${report.gotReadOK}`
+            + `-webkit=${report.webkitOK}`
+            + `-libc=${report.libcOK}`
+            + `-libkernel=${report.libkernelOK}`
+            + `-arena=${report.arenaOK}`
+            + `-handoff=${report.handoffOK}`
+            + `-krw=${report.kernelRWOK}`);
+
+        mark(ctx, "BAGAGWA-BASE-VALUES",
+            `webkit=${ctx && ctx.webkitBase}`
+            + `-libc=${ctx && ctx.libcBase}`
+            + `-libkernel=${ctx && ctx.libkernelBase}`);
+
+        mark(ctx, "BAGAGWA-PROBE-PASS",
+            `fw=${report.firmware}-handoff=${report.handoffOK}`
+            + "-handoff-only=true");
+        return report;
+    }
 
 window.PS5KernelResearch = {
     probe,
