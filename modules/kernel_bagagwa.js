@@ -216,5 +216,34 @@
         return report;
     }
 
-    window.PS5KernelResearch = { analyze, buildReport: (c) => ({ stage: STAGE }) };
+    function probe(ctx) {
+    const report = {
+        stage: STAGE,
+        firmware: ctx && ctx.firmware || "unknown",
+        leakPass: !!(ctx && ctx.leakPass),
+        notifyReady: !!(ctx && ctx.notifyReady),
+        gotReadOK: !!(ctx && ctx.gotReadOK),
+        hasArena: !!(ctx && ctx.arenaView && Number.isFinite(ctx.arenaBacking)),
+        hasBases: !!(ctx && Number.isFinite(ctx.webkitBase)
+            && Number.isFinite(ctx.libcBase)
+            && Number.isFinite(ctx.libkernelBase))
+    };
+
+    mark(ctx, "BAGAGWA-PROBE",
+        `fw=${report.firmware}`
+        + `-leak=${report.leakPass}`
+        + `-notify=${report.notifyReady}`
+        + `-read=${report.gotReadOK}`
+        + `-bases=${report.hasBases}`
+        + `-arena=${report.hasArena}`);
+
+    mark(ctx, "BAGAGWA-PROBE-PASS", "handoff-only=true");
+    return report;
+}
+
+window.PS5KernelResearch = {
+    probe,
+    analyze,
+    buildReport: (c) => ({ stage: STAGE })
+};
 })();
