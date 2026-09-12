@@ -1,12 +1,41 @@
---- /mnt/data/sw(2).js	2026-09-12 18:08:41.132770427 +0000
-+++ /mnt/data/POC-native-interface-ready/sw.js	2026-09-12 18:12:32.338540536 +0000
-@@ -1,7 +1,8 @@
--const V = "ps5poc-v5";
-+const V = "ps5poc-v7";
- const SHELL = [
-   "./", "./index.html", "./exploit.html",
-   "./modules/offsets.mjs",
-+  "./modules/krw_provider.js",
-   "./modules/kernel_bagagwa.js",
-   "./modules/exploit.js",
- ];
+const V = "ps5poc-v7";
+const SHELL = [
+  "./", "./index.html", "./exploit.html",
+  "./modules/offsets.mjs",
+  "./modules/krw_provider.js",
+  "./modules/kernel_bagagwa.js",
+  "./modules/exploit.js",
+];
+
+self.addEventListener("install", e => {
+  e.waitUntil(
+    caches.open(V)
+      .then(c => c.addAll(SHELL))
+      .catch(() => {})
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener("activate", e => {
+  e.waitUntil(
+    caches.keys()
+      .then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", e => {
+  if (e.request.method !== "GET") return;
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      const net = fetch(e.request).then(r => {
+        if (r.ok) {
+          const cl = r.clone();
+          caches.open(V).then(c => c.put(e.request, cl));
+        }
+        return r;
+      }).catch(() => null);
+      return cached || net;
+    })
+  );
+});
