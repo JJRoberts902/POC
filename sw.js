@@ -1,4 +1,4 @@
-const V = "ps5poc-v1";
+const V = "ps5poc-v5";
 const SHELL = [
   "./", "./index.html", "./exploit.html",
   "./modules/offsets.mjs",
