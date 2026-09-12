@@ -1,7 +1,9 @@
 const V = "ps5poc-v1";
 const SHELL = [
-  "/", "/index.html", "/exploit.html",
-  "/modules/offsets.mjs", "/modules/exploit.js",
+  "./", "./index.html", "./exploit.html",
+  "./modules/offsets.mjs",
+  "./modules/kernel_bagagwa.js",
+  "./modules/exploit.js",
 ];
 
 self.addEventListener("install", e => {
