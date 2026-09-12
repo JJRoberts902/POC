@@ -1,7 +1,11 @@
-const V = "ps5poc-v5";
+const V = "ps5poc-v6";
+
 const SHELL = [
-  "./", "./index.html", "./exploit.html",
+  "./",
+  "./index.html",
+  "./exploit.html",
   "./modules/offsets.mjs",
+  "./modules/krw_provider.js",
   "./modules/kernel_bagagwa.js",
   "./modules/exploit.js",
 ];
