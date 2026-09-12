@@ -111,10 +111,16 @@
         }
 
         raw = raw || {};
+        const targetSelectable = raw.targetSelectable === true;
+        const argumentsControlled = raw.argumentsControlled === true;
+        const repeatable = raw.repeatable === true;
         const ready = raw.pass === true
             && raw.smokeTestPassed === true
             && raw.returnedToUserland === true
-            && raw.scope === "generic-userland";
+            && raw.scope === "generic-userland"
+            && targetSelectable
+            && argumentsControlled
+            && repeatable;
 
         const result = {
             ready,
@@ -124,7 +130,15 @@
             firmwareOK: true,
             smokeTestPassed: raw.smokeTestPassed === true,
             returnedToUserland: raw.returnedToUserland === true,
-            scope: raw.scope || "unknown"
+            targetSelectable,
+            argumentsControlled,
+            repeatable,
+            scope: raw.scope || "unknown",
+            reason: ready ? null
+                : !targetSelectable ? "target-selection-not-proven"
+                : !argumentsControlled ? "argument-control-not-proven"
+                : !repeatable ? "repeatability-not-proven"
+                : "generic-native-selftest-not-passed"
         };
         state.genericResult = result;
 
@@ -132,7 +146,11 @@
             `ready=${ready}-registered=true-name=${provider.name}`
             + `-scope=${result.scope}`
             + `-smoke=${result.smokeTestPassed}`
-            + `-returned=${result.returnedToUserland}`);
+            + `-returned=${result.returnedToUserland}`
+            + `-target-selectable=${result.targetSelectable}`
+            + `-args-controlled=${result.argumentsControlled}`
+            + `-repeatable=${result.repeatable}`
+            + (result.reason ? `-reason=${result.reason}` : ""));
         return result;
     }
 
@@ -204,10 +222,17 @@
         }
 
         raw = raw || {};
+        const dispatchVerified = raw.dispatchVerified === true;
+        const scalarArgsVerified = raw.scalarArgsVerified === true;
+        const repeatable = raw.repeatable === true;
+        const pointerMarshalling = raw.pointerMarshalling === true;
         const ready = raw.pass === true
             && raw.smokeTestPassed === true
             && raw.returnedToUserland === true
-            && raw.scope === "userland-syscall";
+            && raw.scope === "userland-syscall"
+            && dispatchVerified
+            && scalarArgsVerified
+            && repeatable;
 
         const result = {
             ready,
@@ -217,7 +242,16 @@
             firmwareOK: true,
             smokeTestPassed: raw.smokeTestPassed === true,
             returnedToUserland: raw.returnedToUserland === true,
-            scope: raw.scope || "unknown"
+            dispatchVerified,
+            scalarArgsVerified,
+            repeatable,
+            pointerMarshalling,
+            scope: raw.scope || "unknown",
+            reason: ready ? null
+                : !dispatchVerified ? "syscall-dispatch-not-proven"
+                : !scalarArgsVerified ? "syscall-scalar-args-not-proven"
+                : !repeatable ? "syscall-repeatability-not-proven"
+                : "syscall-selftest-not-passed"
         };
         state.syscallResult = result;
 
@@ -225,7 +259,12 @@
             `ready=${ready}-registered=true-name=${provider.name}`
             + `-scope=${result.scope}`
             + `-smoke=${result.smokeTestPassed}`
-            + `-returned=${result.returnedToUserland}`);
+            + `-returned=${result.returnedToUserland}`
+            + `-dispatch=${result.dispatchVerified}`
+            + `-scalar-args=${result.scalarArgsVerified}`
+            + `-repeatable=${result.repeatable}`
+            + `-pointer-marshalling=${result.pointerMarshalling}`
+            + (result.reason ? `-reason=${result.reason}` : ""));
         return result;
     }
 
