@@ -231,7 +231,7 @@
         webkitOK,
         libcOK,
         libkernelOK,
-        hasBases: webkitOK && libcOK && libkernelOK
+        hasBases: webkitOK && libkernelOK
     };
 
     mark(ctx, "BAGAGWA-PROBE",
