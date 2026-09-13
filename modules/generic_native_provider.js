@@ -344,6 +344,7 @@
         
         try {
             console.log("[GenericNativeProvider] Registering with framework...");
+           //fix
             layer.registerGeneric(provider);
             console.log("[GenericNativeProvider] ✓ Registered successfully");
             return true;
