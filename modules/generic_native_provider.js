@@ -337,7 +337,7 @@
     // Register with framework
     function tryRegister() {
         const layer = window.PS5UserlandNativeProvider;
-        if (!layer || typeof layer.registerProvider !== 'function') {
+        if (!layer || typeof layer.registerGeneric !== 'function') {
             console.log("[GenericNativeProvider] Framework not ready yet");
             return false;
         }
